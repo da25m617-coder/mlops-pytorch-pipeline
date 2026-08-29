@@ -1,14 +1,26 @@
-# Stage 1: Build dependencies
-FROM python:3.11-slim AS base
+FROM python:3.11-slim AS builder
 WORKDIR /app
-COPY requirements/train.txt .
-RUN pip install --no-cache-dir -r train.txt
 
-# Stage 2: Training runtime
-FROM base AS training
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+COPY requirements/train.txt .
+RUN pip install --no-cache-dir --user -r train.txt
+
+# Stage 2: Copy dependencies and runtime code into final minimal image
+FROM python:3.11-slim AS training
 WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/root/.local/bin:${PATH}" \
+    CONFIG_PATH="/app/configs/training_config.yaml"
+
+# Copy installed site-packages from builder
+COPY --from=builder /root/.local /root/.local
+
+# Copy application source and configs
 COPY src/ ./src/
 COPY configs/ ./configs/
 
-ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["python", "src/train.py"]

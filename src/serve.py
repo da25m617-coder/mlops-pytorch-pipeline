@@ -3,9 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-# Add src folder to Python module search path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
+import uvicorn  # <-- Add import
 from fastapi import FastAPI, File, HTTPException, UploadFile
 import torch
 import torch.nn.functional as F
@@ -82,3 +80,7 @@ async def predict(image: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Prediction failed: {str(e)}")
+
+# Add server block to keep process running on 0.0.0.0:8080
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080)
