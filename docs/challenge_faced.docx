@@ -1,0 +1,18 @@
+The most challenging part of Part D was getting the PyTorch training workload to run reliably inside Kubernetes with limited CPU and memory resources. The Kubernetes configuration itself was relatively straightforward, but debugging the interaction between the Docker container, PyTorch model, dataset, persistent storage, ConfigMap and Kubernetes resource limits required several iterations.
+
+Initially, I deployed a ResNet-18 model for Fashion-MNIST using a batch size of 512. The Kubernetes Job was successfully created and the training container was running, but it did not produce any logs for a long time. This made it difficult to determine whether the application was actually training or had become stuck. I used several Kubernetes and Linux commands to investigate the container, including kubectl exec, /proc/1/cmdline, /proc/1/status, and process statistics. These checks confirmed that the Python training process was running and consuming significant memory.
+
+Another challenge was that the minimal Python container did not contain common Linux utilities such as ps. Therefore, the normal approach of using ps aux to inspect processes did not work. I had to use /proc directly to monitor the process. I also discovered that the Kubernetes Metrics API was not available in my local kind cluster, so kubectl top pod could not be used for resource monitoring.
+
+The most important issue occurred when I manually tested the ResNet-18 forward and backward passes. The process was terminated with exit code 137. The Kubernetes container had a memory limit of 4 GiB, and the large batch size combined with ResNet-18 caused excessive memory consumption. This helped me understand that Kubernetes resource limits are not just configuration values; the workload itself must be designed to operate within those limits.
+
+To solve the problem, I changed the model from ResNet-18 to a lightweight CNN and reduced the batch size from 512 to 64. I rebuilt the Docker image, loaded the new image into the kind cluster, updated the ConfigMap and recreated the Kubernetes Job. The new workload successfully completed training and generated structured JSON logs showing training and validation accuracy. It also saved classifier_v1.pt to the persistent checkpoint directory.
+
+Overall, Part D taught me that deploying an ML workload is different from simply running the same Python code locally. Model architecture, batch size, container resources, persistent storage and Kubernetes configuration all have to work together for reliable execution.
+The model was therefore changed from ResNet-18 to a lightweight CNN and the batch size was reduced to: 64. 
+It took me whole 2 days to diagnose this and therefore got late for part E and F.
+After rebuilding the image and loading it into the kind cluster, the Kubernetes Job completed successfully.
+This demonstrated the importance of matching model complexity and batch size to the resource limits assigned to a Kubernetes workload.
+
+
+ 
