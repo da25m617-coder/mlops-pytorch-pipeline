@@ -1,439 +1,289 @@
 # MLOps PyTorch Pipeline
 
-A containerized PyTorch image-classification pipeline demonstrating the deployment lifecycle from model development to Docker-based training and Kubernetes-based training orchestration.
+A production-style MLOps pipeline for training and serving a PyTorch image classification model using Docker and Kubernetes.
 
-This project was developed as part of the **MLOps & Infrastructure for Machine Learning** assignment.
+The project covers the complete workflow from model development and containerization to Kubernetes-based training and model serving.
 
 ## Project Overview
 
-The project implements an image classification workload using **Fashion-MNIST** and PyTorch.
+This project implements a PyTorch image classification pipeline using the Fashion-MNIST dataset.
 
-The pipeline currently covers:
+The workflow consists of:
 
-* **Part A:** Repository setup and Git workflow
-* **Part B:** PyTorch CNN model and training pipeline
-* **Part C:** Docker containerization
-* **Part D:** Kubernetes training Job
+1. PyTorch model development
+2. Dataset preparation and training
+3. Docker containerization
+4. Kubernetes training Job
+5. Persistent model checkpoint storage
+6. Kubernetes model serving with two replicas
+7. Health checks and Service exposure
+8. End-to-end validation
 
-The Kubernetes training workload is deployed using a local **kind** cluster.
-
-### Current Architecture
+## Architecture
 
 ```text
-                    ┌─────────────────────┐
-                    │   Fashion-MNIST     │
-                    │      Dataset        │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   PyTorch CNN       │
-                    │   Training Script   │
-                    └──────────┬──────────┘
-                               │
-                         Docker Image
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   Kubernetes Job    │
-                    │   mlops-training    │
-                    └──────────┬──────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │                                 │
-              ▼                                 ▼
-       ConfigMap                       PersistentVolumeClaim
-    training_config.yaml                  /app/data
-                                            /app/checkpoints
-              │                                 │
-              └────────────────┬────────────────┘
-                               ▼
-                    classifier_v1.pt
+                    Fashion-MNIST Dataset
+                            |
+                            v
+                   +-------------------+
+                   | PyTorch Training  |
+                   |     Job           |
+                   +-------------------+
+                            |
+                            | classifier_v1.pt
+                            v
+                   +-------------------+
+                   | PersistentVolume  |
+                   |       PVC         |
+                   +-------------------+
+                            |
+                +-----------+-----------+
+                |                       |
+                v                       v
+        +---------------+       +---------------+
+        | Serving Pod 1 |       | Serving Pod 2 |
+        |   FastAPI     |       |   FastAPI     |
+        +---------------+       +---------------+
+                |                       |
+                +-----------+-----------+
+                            |
+                            v
+                  +---------------------+
+                  | Kubernetes Service  |
+                  | ClusterIP :80       |
+                  +---------------------+
+                            |
+                            v
+                     /health
+                     /predict
 ```
 
----
-
-# Project Structure
+## Repository Structure
 
 ```text
 mlops-pytorch-pipeline/
-│
-├── README.md
-├── .gitignore
-│
 ├── .github/
 │   └── workflows/
-│
-├── src/
-│   ├── train.py
-│   ├── model.py
-│   ├── dataset.py
-│   └── serve.py
-│
 ├── configs/
 │   └── training_config.yaml
-│
 ├── docker/
 │   ├── Dockerfile.train
 │   └── Dockerfile.serve
-│
 ├── k8s/
 │   ├── namespace.yaml
 │   ├── configmap.yaml
 │   ├── pvc.yaml
 │   ├── training-job.yaml
 │   ├── serving-deployment.yaml
-│   ├── serving-service.yaml
-│   └── hpa.yaml
-│
+│   └── serving-service.yaml
 ├── requirements/
 │   ├── train.txt
 │   └── serve.txt
-│
-└── tests/
-    └── test_model.py
+├── src/
+│   ├── dataset.py
+│   ├── model.py
+│   ├── train.py
+│   └── serve.py
+├── tests/
+├── docs/
+│   ├── validation_screenshots.docx
+│   └── challenges_faced.docx
+├── README.md
+└── .gitignore
 ```
 
----
+# Part A – Repository Setup
 
-# Part A — Repository Setup
+The project follows a Git-based development workflow using separate branches for different features.
 
-The project follows a Git-based development workflow with separate branches for individual features.
+The repository contains separate branches for:
 
-The main development branch is:
+* Repository setup
+* PyTorch model implementation
+* Docker containerization
+* Kubernetes deployment
+* Documentation and validation
+
+Meaningful commit messages following Conventional Commit style were used where applicable.
+
+Sensitive and generated files such as virtual environments, Python cache files and locally generated artifacts are excluded from version control.
+
+# Part B – PyTorch Model
+
+The project uses a PyTorch image classifier for the Fashion-MNIST dataset.
+
+### Model
+
+The model is implemented in:
 
 ```text
-main
+src/model.py
 ```
 
-Feature work is performed on dedicated branches, for example:
+The implemented architecture is a CNN with 10 output classes corresponding to the Fashion-MNIST categories.
+
+### Dataset
+
+Dataset loading and preprocessing are implemented in:
 
 ```text
-k8s-deployment
-part-e-model-serving
+src/dataset.py
 ```
 
-The Kubernetes training implementation was developed separately and then merged into the main branch.
+The Fashion-MNIST dataset is downloaded using `torchvision.datasets` and processed using torchvision transforms.
 
-Git commits use descriptive messages such as:
+### Training
 
-```text
-Implement Part D Kubernetes training pipeline
-```
-
-A `.gitignore` file is used to prevent generated files and local development artifacts such as datasets, checkpoints, virtual environments and Python cache files from being committed.
-
----
-
-# Part B — PyTorch Model
-
-## Dataset
-
-The project uses the **Fashion-MNIST** dataset.
-
-Fashion-MNIST contains grayscale images of size:
-
-```text
-28 × 28
-```
-
-with:
-
-```text
-10 classes
-```
-
-The dataset is downloaded automatically using `torchvision.datasets.FashionMNIST`.
-
-Training data uses:
-
-* Random horizontal flip
-* Conversion to tensor
-* Normalization
-
-Validation data uses:
-
-* Conversion to tensor
-* Normalization
-
-The Fashion-MNIST normalization values used are:
-
-```text
-mean = 0.2860
-std  = 0.3530
-```
-
-## CNN Model
-
-The final model used for the Kubernetes training workload is a lightweight CNN instead of ResNet-18.
-
-The model accepts:
-
-```text
-1 × 28 × 28
-```
-
-grayscale Fashion-MNIST images and produces predictions for:
-
-```text
-10 classes
-```
-
-The architecture is selected through the configuration file:
-
-```yaml
-model:
-  architecture: "cnn"
-  num_classes: 10
-```
-
-This makes the model architecture configurable without changing the training script.
-
-## Training
-
-The training implementation is located in:
+The training pipeline is implemented in:
 
 ```text
 src/train.py
 ```
 
-The training script:
+Training configuration is read from:
 
-1. Loads the YAML configuration.
-2. Selects CPU or CUDA automatically.
-3. Creates the CNN model.
-4. Loads the Fashion-MNIST dataset.
-5. Creates the optimizer and loss function.
-6. Trains the model.
-7. Evaluates it on the validation dataset.
-8. Prints metrics as JSON lines.
-9. Saves the best checkpoint.
-10. Supports early stopping.
-
-Example training output:
-
-```json
-{"epoch": 1, "train_loss": 0.4497, "train_accuracy": 0.839, "val_loss": 0.3399, "val_accuracy": 0.8766}
-{"event": "checkpoint_saved", "path": "/app/checkpoints/classifier_v1.pt"}
-{"event": "training_complete", "best_val_loss": 0.3399}
+```text
+configs/training_config.yaml
 ```
 
----
+The training process:
 
-# Part C — Docker Containerization
+* Loads the configured model
+* Loads Fashion-MNIST
+* Performs training and validation
+* Calculates loss and accuracy
+* Prints metrics as JSON lines
+* Saves the best checkpoint
+* Supports early stopping
+
+The generated checkpoint is:
+
+```text
+classifier_v1.pt
+```
+
+# Part C – Docker Containerization
+
+Two Docker images are used.
 
 ## Training Image
 
-The training workload is packaged using:
+The training image is defined in:
 
 ```text
 docker/Dockerfile.train
 ```
 
-The Docker image contains the Python runtime, PyTorch dependencies and project source code.
-
-Build the training image using:
+Example build command:
 
 ```bash
 docker build -f docker/Dockerfile.train -t mlops-train:v2 .
 ```
 
-The resulting image was loaded into the kind Kubernetes cluster using:
+The image executes:
 
 ```bash
-kind load docker-image mlops-train:v2 --name ml-training
+python src/train.py
 ```
-
-The image was then used by the Kubernetes training Job.
 
 ## Serving Image
 
-A separate serving Dockerfile is provided:
+The serving image is defined in:
 
 ```text
 docker/Dockerfile.serve
 ```
 
-The serving image uses a slim Python base image and contains only inference-related dependencies.
+It contains only the dependencies required for inference and runs the FastAPI application as a non-root user.
 
-The serving application is implemented using FastAPI and exposes:
+Example:
+
+```bash
+docker build -f docker/Dockerfile.serve -t mlops-serve:v2 .
+```
+
+The serving application listens on:
+
+```text
+0.0.0.0:8080
+```
+
+Endpoints:
 
 ```text
 GET  /health
 POST /predict
 ```
 
-The serving implementation is prepared for the later Kubernetes model-serving stage.
+# Part D – Kubernetes Training Job
 
----
-
-# Part D — Kubernetes Training Job
-
-The Kubernetes training workload is deployed as a `Job`.
-
-The Kubernetes resources are:
-
-```text
-k8s/namespace.yaml
-k8s/configmap.yaml
-k8s/pvc.yaml
-k8s/training-job.yaml
-```
-
-## Kubernetes Cluster
-
-The workload was tested using a local **kind** cluster.
-
-The active Kubernetes context was:
-
-```bash
-kubectl config current-context
-```
-
-which returned:
-
-```text
-kind-ml-training
-```
-
----
+The Kubernetes training pipeline uses the `ml-training` namespace.
 
 ## Namespace
 
-The project uses a dedicated namespace:
+```bash
+kubectl apply -f k8s/namespace.yaml
+```
+
+Namespace:
 
 ```text
 ml-training
 ```
 
-This keeps the project's Kubernetes resources isolated from other workloads.
-
-Apply the namespace:
-
-```bash
-kubectl apply -f k8s/namespace.yaml
-```
-
----
-
 ## ConfigMap
 
-Training parameters are stored in:
+The training configuration is stored in:
 
 ```text
 k8s/configmap.yaml
 ```
 
-The configuration contains:
-
-```yaml
-model:
-  architecture: cnn
-  num_classes: 10
-
-training:
-  epochs: 1
-  batch_size: 64
-  learning_rate: 0.001
-  early_stopping_patience: 3
-
-data:
-  dataset: fashion_mnist
-  data_dir: /app/data
-
-output:
-  checkpoint_dir: /app/checkpoints
-  model_name: classifier_v1.pt
-```
-
-The ConfigMap is mounted inside the training container at:
+and mounted into the training container at:
 
 ```text
 /app/configs
 ```
 
-The training script reads:
+The configuration includes:
 
-```text
-/app/configs/training_config.yaml
-```
-
-This separates configuration from the Docker image.
-
----
+* Model architecture
+* Number of classes
+* Epochs
+* Batch size
+* Learning rate
+* Early stopping patience
+* Dataset location
+* Checkpoint location
 
 ## Persistent Storage
 
-A PersistentVolumeClaim is used to provide persistent storage for:
+The checkpoint PVC is:
+
+```text
+model-checkpoint-pvc
+```
+
+It is used for persistent storage of:
 
 ```text
 /app/data
 /app/checkpoints
 ```
 
-This is important because the trained model checkpoint should survive the lifecycle of the training container.
+The training Job uses the PVC with separate subpaths for data and checkpoints.
 
-The trained model is saved as:
+## Training Job
 
-```text
-/app/checkpoints/classifier_v1.pt
-```
-
----
-
-## Kubernetes Training Job
-
-The Job manifest is:
+The Job is defined in:
 
 ```text
 k8s/training-job.yaml
 ```
 
-The container uses:
-
-```yaml
-image: mlops-train:v2
-```
-
-The Job requests:
-
-```yaml
-requests:
-  cpu: "2"
-  memory: "4Gi"
-```
-
-and limits:
-
-```yaml
-limits:
-  cpu: "2"
-  memory: "4Gi"
-```
-
-The ConfigMap is mounted at:
-
-```text
-/app/configs
-```
-
-and the PVC is mounted for:
-
-```text
-/app/data
-/app/checkpoints
-```
-
----
-
-# Deploying the Training Workload
-
-Apply the Kubernetes resources:
+Apply it using:
 
 ```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/pvc.yaml
 kubectl apply -f k8s/training-job.yaml
 ```
 
@@ -443,111 +293,277 @@ Check the Job:
 kubectl get jobs -n ml-training
 ```
 
-Check the Pod:
+Check the training pod:
 
 ```bash
 kubectl get pods -n ml-training
 ```
 
-Example:
+View training logs:
+
+```bash
+kubectl logs job/mlops-training-job -n ml-training
+```
+
+The successful training output includes:
 
 ```text
-NAME                       READY   STATUS    RESTARTS   AGE
-mlops-training-job-zvzqp   0/1     Completed 0          4m
+checkpoint_saved
+training_complete
 ```
 
----
-
-# Verifying the Configuration
-
-The mounted configuration can be checked using:
-
-```bash
-kubectl exec -it <pod-name> -n ml-training -- \
-cat /app/configs/training_config.yaml
-```
-
-The deployed image can be verified using:
-
-```bash
-kubectl get pod <pod-name> -n ml-training \
--o jsonpath="{.spec.containers[0].image}"
-```
-
-Expected:
+The trained model checkpoint is stored on the PVC as:
 
 ```text
-mlops-train:v2
+classifier_v1.pt
 ```
 
-The training process can be verified using:
+# Part E – Kubernetes Model Serving
 
-```bash
-kubectl exec -it <pod-name> -n ml-training -- \
-sh -c "cat /proc/1/cmdline | tr '\0' ' '; echo"
-```
+The trained model is served using a FastAPI application running in Kubernetes.
 
-Expected:
+## Deployment
+
+The serving Deployment is defined in:
 
 ```text
-python src/train.py
+k8s/serving-deployment.yaml
 ```
 
----
+Deployment name:
 
-# Training Validation
+```text
+mlops-serving-deployment
+```
 
-Training logs can be viewed using:
+The Deployment runs two replicas:
+
+```yaml
+replicas: 2
+```
+
+Both replicas use:
+
+```text
+mlops-serve:v2
+```
+
+The checkpoint PVC is mounted read-only at:
+
+```text
+/app/checkpoints
+```
+
+The Deployment uses a RollingUpdate strategy:
+
+```yaml
+maxSurge: 1
+maxUnavailable: 0
+```
+
+### Resource Configuration
+
+Requests:
+
+```text
+CPU:    500m
+Memory: 1Gi
+```
+
+Limits:
+
+```text
+CPU:    1
+Memory: 2Gi
+```
+
+### Health Checks
+
+Liveness probe:
+
+```text
+GET /health
+period: 10 seconds
+failure threshold: 3
+```
+
+Readiness probe:
+
+```text
+GET /health
+initial delay: 15 seconds
+period: 5 seconds
+```
+
+Verify the Deployment:
 
 ```bash
-kubectl logs <pod-name> -n ml-training
+kubectl get deployment mlops-serving-deployment -n ml-training
 ```
 
-Successful execution produced:
-
-```json
-{"epoch": 1, "train_loss": 0.4497, "train_accuracy": 0.839, "val_loss": 0.3399, "val_accuracy": 0.8766}
-{"event": "checkpoint_saved", "path": "/app/checkpoints/classifier_v1.pt"}
-{"event": "training_complete", "best_val_loss": 0.3399}
-```
-
-The trained checkpoint can be verified using:
+Verify the two replicas:
 
 ```bash
-kubectl exec -it <pod-name> -n ml-training -- \
+kubectl get pods -n ml-training -l app=mlops-serving
+```
+
+## Kubernetes Service
+
+The Service is defined in:
+
+```text
+k8s/serving-service.yaml
+```
+
+Service name:
+
+```text
+mlops-serving-service
+```
+
+Service type:
+
+```text
+ClusterIP
+```
+
+Port mapping:
+
+```text
+Service port: 80
+Container port: 8080
+```
+
+Verify:
+
+```bash
+kubectl get svc mlops-serving-service -n ml-training
+```
+
+# Part F – End-to-End Validation
+
+The complete Kubernetes workflow was validated on the local Kubernetes cluster.
+
+## Apply Kubernetes Resources
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/training-job.yaml
+kubectl apply -f k8s/serving-deployment.yaml
+kubectl apply -f k8s/serving-service.yaml
+```
+
+## Verify Training
+
+```bash
+kubectl get pods -n ml-training
+```
+
+The training Job completed successfully.
+
+Training logs were verified using:
+
+```bash
+kubectl logs job/mlops-training-job -n ml-training
+```
+
+The logs showed the checkpoint being saved and training completing successfully.
+
+## Verify Checkpoint
+
+The trained checkpoint was verified inside a serving pod:
+
+```bash
+kubectl exec -it <serving-pod> -n ml-training -- \
 ls -lh /app/checkpoints
 ```
 
----
-## Part D Validation
+The following file was present:
 
-Kubernetes training was successfully validated using:
-- Kubernetes Pod status
-- Kubernetes Job completion
-- Training logs
-- ConfigMap verification
-- Model checkpoint verification
+```text
+classifier_v1.pt
+```
 
-Validation screenshots and challenges faced are available in the `docs/` directory.
+## Verify Serving Replicas
 
-# Technologies Used
+```bash
+kubectl get pods -n ml-training -l app=mlops-serving
+```
 
-| Technology            | Purpose                               |
-| --------------------- | ------------------------------------- |
-| Python                | Programming language                  |
-| PyTorch               | Deep learning framework               |
-| torchvision           | Dataset and image transformations     |
-| Fashion-MNIST         | Image classification dataset          |
-| Docker                | Containerization                      |
-| Kubernetes            | Workload orchestration                |
-| kind                  | Local Kubernetes cluster              |
-| kubectl               | Kubernetes management                 |
-| ConfigMap             | External training configuration       |
-| PersistentVolumeClaim | Persistent dataset/checkpoint storage |
-| FastAPI               | Model-serving API                     |
-| Git/GitHub            | Version control                       |
+Two serving replicas reached:
 
----
+```text
+1/1 Running
+1/1 Running
+```
 
+## Port Forward
 
-The current README documents the implementation through **Part D**. Part E and Part F will be documented after the serving and end-to-end validation stages are completed.
+The Kubernetes Service was exposed locally using:
+
+```bash
+kubectl port-forward svc/mlops-serving-service 8081:80 -n ml-training
+```
+
+Port `8081` was used because local port `8080` was already occupied.
+
+## Health Endpoint
+
+The health endpoint was tested using:
+
+```bash
+curl http://localhost:8081/health
+```
+
+Successful response:
+
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
+```
+
+## Prediction Endpoint
+
+The prediction API was tested using:
+
+```bash
+curl -X POST http://localhost:8081/predict \
+  -F "image=@test_image.png"
+```
+
+The API returns:
+
+* Predicted Fashion-MNIST class
+* Prediction confidence
+* Probability for each class
+
+## Validation Evidence
+
+Screenshots and terminal outputs for the Kubernetes training and serving workflow are available in:
+
+```text
+docs/validation_screenshots.docx
+```
+
+The validation evidence covers:
+
+* Kubernetes namespace and configuration
+* Training Job
+* Training logs
+* Checkpoint creation
+* Serving Deployment
+* Two serving replicas
+* Kubernetes Service
+* Health endpoint
+* Prediction endpoint
+
+# Conclusion
+
+The project demonstrates an end-to-end PyTorch MLOps workflow using Docker and Kubernetes.
+
+The training workload runs as a Kubernetes Job and stores the resulting model checkpoint on persistent storage. The trained model is then loaded by two FastAPI serving replicas. Kubernetes health probes monitor the serving containers, while a ClusterIP Service provides access to the inference API.
+
+This setup demonstrates separation between training and serving workloads and provides a foundation for scalable model deployment.

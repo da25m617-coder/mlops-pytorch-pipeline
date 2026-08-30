@@ -12,7 +12,7 @@ from torchvision import transforms
 
 from model import get_model
 
-app = FastAPI(title="Fashion-MNIST ResNet-18 API")
+app = FastAPI(title="Fashion-MNIST CNN API")
 
 CLASSES = [
     "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
@@ -36,7 +36,7 @@ def load_checkpoint():
     if not MODEL_PATH.exists():
         return False
     try:
-        model = get_model(architecture="resnet18", num_classes=10)
+        model = get_model(architecture="cnn", num_classes=10)
         checkpoint = torch.load(MODEL_PATH, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.to(device)
