@@ -519,37 +519,16 @@ ls -lh /app/checkpoints
 ```
 
 ---
+## Part D Validation
 
-# Troubleshooting During Part D
+Kubernetes training was successfully validated using:
+- Kubernetes Pod status
+- Kubernetes Job completion
+- Training logs
+- ConfigMap verification
+- Model checkpoint verification
 
-During the Kubernetes training implementation, ResNet-18 was initially used with a batch size of 512.
-
-The container had:
-
-```text
-CPU limit:    2 cores
-Memory limit: 4Gi
-```
-
-The ResNet-18 workload consumed significant memory and a manual test process was terminated with:
-
-```text
-exit code 137
-```
-
-This indicated that the process was killed by the operating system/container runtime, consistent with memory pressure.
-
-The model was therefore changed from ResNet-18 to a lightweight CNN and the batch size was reduced to:
-
-```text
-64
-```
-
-After rebuilding the image and loading it into the kind cluster, the Kubernetes Job completed successfully.
-
-This demonstrated the importance of matching model complexity and batch size to the resource limits assigned to a Kubernetes workload.
-
----
+Validation screenshots and challenges faced are available in the `docs/` directory.
 
 # Technologies Used
 
@@ -570,15 +549,5 @@ This demonstrated the importance of matching model complexity and batch size to 
 
 ---
 
-# Current Assignment Status
-
-| Part                              | Status      |
-| --------------------------------- | ----------- |
-| Part A — Repository Setup         | Completed   |
-| Part B — PyTorch Model            | Completed   |
-| Part C — Docker Containerization  | Completed   |
-| Part D — Kubernetes Training Job  | Completed   |
-| Part E — Kubernetes Model Serving | In progress |
-| Part F — End-to-End Validation    | Pending     |
 
 The current README documents the implementation through **Part D**. Part E and Part F will be documented after the serving and end-to-end validation stages are completed.
